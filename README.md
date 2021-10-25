@@ -8,8 +8,8 @@ Lots of standart features (shown below) are not implemented yet - use with cauti
 
  * Todo: 
  - [ ] directories are not listed in `keys()`: THIS IS DANGEROUS, THEIR NAMES ARE SHAS AND CAN'T BE WORKED BACK
- - [ ] Save file-names in them automatically - every file will become a json file
- - [ ] Make directory function
+ - [ ] Save file-names in the files themselves automatically - every file will become a json file
+ - [ ] Make directory function 
  - [ ] `remove()` should remove directories too
  - [ ] `get()` in directories should `keys()` it
  
