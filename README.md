@@ -1,8 +1,11 @@
 # simple-database
 Simple node-js database for simple needs
 
+# Setup
+```js
+const Database = require("simple-database")
 
-
+```
 
 ***
 
