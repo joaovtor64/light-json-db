@@ -17,6 +17,7 @@ class DataManager {
 			return data;
 		} else {
 			return JSON.stringify(data);
+
 		}
 	}
 	/**
@@ -161,6 +162,9 @@ class RawDatabase {
 	 * @returns value at key (directory)
 	 */
 	async get(key) {
+		if (key.endsWith("/")) {
+			key = key.slice(0, key.length - 1)
+		}
 		if (this.files[key]) {
 			return await this.files[key].data;
 		} else {
@@ -171,12 +175,26 @@ class RawDatabase {
 	}
 
 	async remove(key) {
+
+
 		if (!this.files[key]) {
-			await this.get(key);
+			if ((await fs.lstat(key)).isDirectory()) {
+				await fs.rm(key, {
+					recursive: true,
+					force: true
+				})
+			} else {
+				await this.get(key);
+				this.files[key].remove();
+			}
 
+
+
+		} else {
+
+
+			this.files[key].remove();
 		}
-
-		this.files[key].remove();
 
 
 
@@ -188,11 +206,12 @@ class RawDatabase {
 class Database {
 	rdb = new RawDatabase();
 	location = "./"
+	STORE_FILENAME_IN_FILE = true;
 	/**
 	 * 
 	 * @param {Stirng} location 
 	 */
-	constructor(location) {
+	constructor(location, STORE_FILENAME_IN_FILE) {
 		if (location) {
 			if (location.endsWith("/")) {
 				this.location = location;
@@ -203,25 +222,26 @@ class Database {
 		} else {
 			console.warn("WARNING: NO LOCATION - CURRENT WILL BE USED")
 		}
+		if (STORE_FILENAME_IN_FILE !== undefined) {
+			this.STORE_FILENAME_IN_FILE = STORE_FILENAME_IN_FILE
+		}
 	}
 
 	//Path is an Array
 	//Every new file must create a ls.json (or similar) that contains info on what files are in that directory
 	//All files are named after their SHAs
 
-	async set(apath, val) {
+	async set(key, val) {
 		//DIRECTORY LOCATION
-		let path = this.location + "/";
+		let path = this.location;
 
-		const filesha = sha256(apath[apath.length - 1]);
-		for (let i = 0; i < apath.length - 1; i++) {
-			path += sha256(apath[i]) + "/"
+		const filesha = sha256(key[key.length - 1]);
+		for (let i = 0; i < key.length - 1; i++) {
+			path += sha256(key[i]) + "/"
 
 		}
 
-		await fs.mkdir(path, {
-			recursive: true
-		});
+
 		let cTree = await fs.readdir(path);
 		const filePath = path + filesha;
 
@@ -229,7 +249,7 @@ class Database {
 		const cacheFiles = Object.keys(this.rdb.files)
 
 		if (!cTree.includes("index.json") && (!cacheFiles.includes(path + "index.json"))) {
-			this.rdb.set(path + "index.json", '["' + apath[apath.length - 1] + '"]')
+			this.rdb.set(path + "index.json", '["' + key[key.length - 1] + '"]')
 
 
 
@@ -244,70 +264,119 @@ class Database {
 				//Pretty sure this will never ever ever ever ever ever ever ever ever happen but...
 				ls = [];
 			}
-			ls.push(apath[apath.length - 1]);
+			//If index.json already has that node don't add it
+			if (!ls.includes(key[key.length - 1])) {
+				ls.push(key[key.length - 1])
+			}
+
 			this.rdb.set(path + "index.json", JSON.stringify(ls))
 			console.log(Object.keys(this.rdb.files))
 		}
-		this.rdb.set(filePath, DataManager.encode(val))
+		if (this.STORE_FILENAME_IN_FILE) {
+			this.rdb.set(filePath, DataManager.encode({
+					content: val,
+					name: key[key.length - 1],
+					lastModified: Date.now()
+				}
+
+			))
+		} else {
+			this.rdb.set(filePath, DataManager.encode(val))
+		}
 
 
 
 
 
 	}
-	async get(apath) {
+	async get(key) {
 
 
 
 
 
-		let path = this.location + DataManager.PathEncode(apath);
+		let path = this.location + DataManager.PathEncode(key);
 
 
 
 
 		let data;
-		try {
-			data = await this.rdb.get(path)
-		} catch (e) {
-			console.error(e);
-			return undefined
-		} finally {
 
-			return DataManager.decode(data)
+		//Check if is directory and if it exists "efficiently"
+		data = DataManager.decode(await this.rdb.get(path));
+		if (this.STORE_FILENAME_IN_FILE) {
+			return data.content
+		} else {
+			return data;
 		}
+
 
 
 	}
 	/**
 	 * Remove a file and delete it (after the cache time)
-	 * @param {Array} apath 
+	 * @param {Array} key 
 	 */
-	async remove(apath) {
+	async remove(key) {
 
 
 		let ls = this.location + "/";
 		let lsc = [];
-		for (let i = 0; i < apath.length - 1; i++) {
-			ls += sha256(apath[i]) + "/"
+		for (let i = 0; i < key.length - 1; i++) {
+			ls += sha256(key[i]) + "/"
 
 		}
 		ls += "index.json"
 		lsc = JSON.parse(await fs.readFile(ls, "utf-8"));
-		lsc.splice(lsc.indexOf(apath[apath.length - 1]), 1);
+
+		lsc.splice(lsc.indexOf(key[key.length - 1]), 1);
 		this.rdb.set(ls, JSON.stringify(lsc))
 
-		this.rdb.remove(this.location + DataManager.PathEncode(apath))
+		this.rdb.remove(this.location + DataManager.PathEncode(key))
 	}
 
 	/**
 	 * Returns a list of files at a certain directory
-	 * @param {Array} apath 
+	 * @param {Array} key 
 	 */
-	async keys(apath) {
-		return DataManager.decode(await this.rdb.get(this.location + DataManager.PathEncode(apath) + "index.json"));
+	async keys(key) {
+		return DataManager.decode(await this.rdb.get(this.location + DataManager.PathEncode(key) + "index.json"));
 
 	}
+	/**
+	 * Makes key a directory 
+	 * 
+	 * @param {String} key 
+	 */
+	async dir(key) {
+
+		let path = this.location;
+		for (let i = 0; i < key.length - 1; i++) {
+			path += sha256(key[i]) + "/"
+
+		}
+		let lsPath = path + "index.json";
+		let lsc = [];
+		try {
+			lsc = JSON.parse(await fs.readFile(lsPath, "utf-8"));
+		} catch (e) {
+
+		}
+
+		//If index.json already has that node don't add it
+		if (!lsc.includes(key[key.length - 1])) {
+			lsc.push(key[key.length - 1])
+		}
+		fs.writeFile(lsPath, JSON.stringify(lsc))
+
+		await fs.mkdir(this.location + DataManager.PathEncode(key), {
+			recursive: false
+		})
+
+		this.location + DataManager.PathEncode(key)
+	}
+
+
 }
 
 
