@@ -1,17 +1,15 @@
 {
-  "name": "simple-database",
-  "version": "1.0.0",
-  "description": "Simple node.js database that uses JSON files ",
+  "name": "light-json-db",
+  "version": "1.3.2",
+  "description": "Simple node.js database that uses JSON files and cache in under 400 lines",
   "main": "index.js",
-  "directories": {
-    "test": "test"
-  },
-  "scripts": {
-    "test": "echo it works ok"
-  },
   "keywords": [
-    "database"
+    "database",
+    "json"
   ],
   "author": "Joaovtor64",
-  "license": "ISC"
+  "license": "ISC",
+  "scripts": {
+    "test": "rm -rf dbtest && mkdir dbtest && node test.js"
+  }
 }
